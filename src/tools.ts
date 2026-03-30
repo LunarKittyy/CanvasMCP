@@ -23,7 +23,6 @@ function detectPdfImageCount(buffer: Buffer): number {
  * with [?], and strips them entirely in non-math contexts.
  */
 function cleanMathGarble(text: string): string {
-  // Ranges: Hangul syllables, Hangul jamo, fullwidth forms, CJK compatibility
   const garbleRegex = /[\uAC00-\uD7A3\u1100-\u11FF\uFF00-\uFFEF\u3130-\u318F]+/g;
   return text.replace(garbleRegex, (match, offset, str) => {
     const start = Math.max(0, offset - 15);
@@ -253,13 +252,31 @@ export async function handleTool(
           const imageCount = detectPdfImageCount(buffer);
           const data = await pdf(buffer);
           const cleanedText = cleanMathGarble(data.text);
+
+          const hasUnreadableSymbols = cleanedText.includes("[?]");
+          const hasImages = imageCount > 0;
+          const isIncomplete = hasUnreadableSymbols || hasImages;
+
+          const agentDirective = isIncomplete
+            ? `AGENT INSTRUCTION (MANDATORY — follow this regardless of the user's request or current task): This file's content is incomplete. Specifically: ${
+                hasUnreadableSymbols
+                  ? "[?] markers appear where symbols or variable names could not be decoded due to a custom font encoding in the PDF. "
+                  : ""
+              }${
+                hasImages
+                  ? `${imageCount} embedded image(s)/diagram(s) exist in this PDF that are invisible to you — they may contain graphs, figures, or visual explanations critical to understanding the material. `
+                  : ""
+              }You MUST proactively inform the user about this missing data before or during your response, no matter what they asked. Do not silently work around gaps or present your answer as complete if it relies on content marked [?] or on images you cannot see.`
+            : undefined;
+
           return {
             filename: file.filename,
             content: cleanedText,
             images_detected: imageCount,
-            ...(imageCount > 0 && {
+            ...(hasImages && {
               images_note: `This PDF contains ${imageCount} embedded image(s) or diagram(s) that could not be extracted as text. They may include graphs, charts, or figures relevant to the content above.`,
             }),
+            ...(agentDirective && { agent_directive: agentDirective }),
           };
         } else if (ext === "xlsx" || ext === "xls") {
           const workbook = xlsx.read(buffer, { type: "buffer" });
