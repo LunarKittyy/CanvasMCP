@@ -10,7 +10,7 @@ This skill allows a future AI agent to understand exactly how this codebase work
 ## 🤖 AI Agent Behavioral Guidelines
 
 - **Search Before Guessing**: If you are unsure about a Canvas API endpoint, a parsing library's behavior, or a Firebase error, **ALWAYS** prioritize using your `search_web` or `perplexity_ask` tools. Never make up API structures or code patterns.
-- **Reference Official Docs**: For Canvas API changes, refer to the [official Canvas LMS API documentation](https://developerdocs.instructure.com/services/canvas).
+- **Reference Official Docs**: For Canvas API changes, refer to the [official Canvas LMS API documentation](https://canvas.instructure.com/doc/api/).
 - **Verify Imports**: Because this is an ESM project using legacy CJS libraries, verify any new imports by checking the `node_modules` structure or using a scratch script (`node -e ...`).
 
 ## 🏗️ Architecture Overview
@@ -66,13 +66,28 @@ To expand the server's capabilities:
 ### File Parsing Protocol
 
 The `read_file_content` tool is the most complex. It uses:
-
-- `pdf-parse`: For PDFs.
+- `@cedrugs/pdf-parse`: For PDFs. This is a maintained ESM-compatible fork of `pdf-parse`. Import it as a native ESM default import (`import pdf from "@cedrugs/pdf-parse"`). Do NOT use the original `pdf-parse` package — it has CJS/ESM interop issues in this environment.
 - `xlsx`: For Excel (converts to CSV for table readability).
 - `officeparser`: For Word (`.docx`) and PowerPoint (`.pptx`).
 
+#### PDF-specific helpers in `src/tools.ts`
+
+- **`decodeFilename(filename)`**: Decodes URL-encoded Canvas filenames (e.g. `F%C3%B6rel%C3%A4sning+3.pdf` → `Föreläsning 3.pdf`). Applied to all file types before returning.
+- **`detectPdfImageCount(buffer)`**: Scans the raw PDF buffer for `/Subtype /Image` markers to count embedded images/diagrams. Note: may slightly overcount due to inline vector masks — treat the number as approximate.
+- **`cleanMathGarble(text)`**: Replaces garbled Hangul/CJK/fullwidth Unicode characters (caused by custom math font encoding in PDFs) with `[?]` in math contexts, and strips them silently otherwise.
+- **`agent_directive`**: When a PDF contains `[?]` markers or detected images, an `agent_directive` field is added to the response. This is a mandatory instruction to the consuming AI agent to proactively inform the user about missing/unreadable content, regardless of the current task.
+
 > [!CAUTION]
 > If adding new parsing libraries, ensure they are 100% Pure JavaScript (Node.js) compatible. Firebase Functions do not have system binaries like `unzip` or `pdftotext` available in standard environments.
+
+### Pagination
+
+All list endpoints (`getCourses`, `getModules`, `getModuleItems`, `getAssignments`, `getAnnouncements`) use the `paginate()` helper in `src/canvas-client.ts`. This method:
+- Follows Canvas `Link` response headers to fetch all pages automatically.
+- Uses `per_page: 100` to minimize round trips.
+- Handles both relative paths (first request) and absolute URLs (subsequent pages from `Link` headers).
+
+Do not implement manual pagination in new tools — always use `this.paginate<T>(path, params)`.
 
 ## ⚠️ Troubleshooting Tips
 
@@ -80,6 +95,7 @@ The `read_file_content` tool is the most complex. It uses:
 - **Unauthorized (401)**: Claude isn't sending the Bearer token. Try "re-authorizing" the connector by deleting and re-adding it in Claude.ai.
 - **Discovery Failed**: Ensure the server is returning the `WWW-Authenticate` header with absolute URLs.
 - **Memory Errors**: If parsing large files fails, check the Firebase logs. You may need to increase the `memory` setting in `src/index.ts` further (e.g., to `1GiB`).
+- **PDF parsing fails with "pdf is not a function"**: This means `pdf-parse` (original) is being used instead of `@cedrugs/pdf-parse`. Check the import at the top of `src/tools.ts`.
 
 ## 🧹 Maintenance Commands
 

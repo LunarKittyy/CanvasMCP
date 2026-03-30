@@ -8,6 +8,18 @@ const xlsx = require("xlsx");
 const { parseOffice } = require("officeparser");
 
 /**
+ * Decodes a URL-encoded Canvas filename to a human-readable string.
+ * e.g. "F%C3%B6rel%C3%A4sning+3.pdf" -> "Föreläsning 3.pdf"
+ */
+function decodeFilename(filename: string): string {
+  try {
+    return decodeURIComponent(filename.replace(/\+/g, " "));
+  } catch {
+    return filename;
+  }
+}
+
+/**
  * Detects the number of embedded images/XObjects in a PDF buffer by scanning
  * the raw bytes for PDF image markers.
  */
@@ -190,7 +202,7 @@ export async function handleTool(
       return {
         id: file.id,
         display_name: file.display_name,
-        filename: file.filename,
+        filename: decodeFilename(file.filename),
         content_type: file["content-type"],
         size_bytes: file.size,
         download_url: file.url,
@@ -244,8 +256,9 @@ export async function handleTool(
     case "read_file_content": {
       const { file_id } = ReadFileContentInput.parse(args);
       const file = await client.getFile(file_id);
+      const filename = decodeFilename(file.filename);
       const buffer = await client.downloadBuffer(file.url);
-      const ext = file.filename.split(".").pop()?.toLowerCase();
+      const ext = filename.split(".").pop()?.toLowerCase();
 
       try {
         if (ext === "pdf") {
@@ -270,7 +283,7 @@ export async function handleTool(
             : undefined;
 
           return {
-            filename: file.filename,
+            filename,
             content: cleanedText,
             images_detected: imageCount,
             ...(hasImages && {
@@ -284,29 +297,20 @@ export async function handleTool(
           workbook.SheetNames.forEach((name: string) => {
             sheetsData[name] = xlsx.utils.sheet_to_csv(workbook.Sheets[name]);
           });
-          return {
-            filename: file.filename,
-            content: sheetsData,
-          };
+          return { filename, content: sheetsData };
         } else if (ext === "docx" || ext === "pptx") {
           const text = await parseOffice(buffer);
-          return {
-            filename: file.filename,
-            content: text,
-          };
+          return { filename, content: text };
         } else if (ext === "txt" || ext === "csv" || ext === "json" || ext === "md") {
-          return {
-            filename: file.filename,
-            content: buffer.toString("utf-8"),
-          };
+          return { filename, content: buffer.toString("utf-8") };
         } else {
           return {
-            filename: file.filename,
+            filename,
             error: `Unsupported file format for reading: .${ext}. You can still download the file using the link provided in get_file_url.`,
           };
         }
       } catch (error) {
-        throw new Error(`Failed to parse file ${file.filename}: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(`Failed to parse file ${filename}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
