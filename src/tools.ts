@@ -7,6 +7,33 @@ const require = createRequire(import.meta.url);
 const xlsx = require("xlsx");
 const { parseOffice } = require("officeparser");
 
+/**
+ * Detects the number of embedded images/XObjects in a PDF buffer by scanning
+ * the raw bytes for PDF image markers.
+ */
+function detectPdfImageCount(buffer: Buffer): number {
+  const str = buffer.toString("binary");
+  const matches = str.match(/\/Subtype\s*\/Image/g);
+  return matches ? matches.length : 0;
+}
+
+/**
+ * Cleans up garbled Unicode characters that result from PDFs using custom math
+ * fonts. Replaces runs of Hangul/fullwidth/CJK characters in math contexts
+ * with [?], and strips them entirely in non-math contexts.
+ */
+function cleanMathGarble(text: string): string {
+  // Ranges: Hangul syllables, Hangul jamo, fullwidth forms, CJK compatibility
+  const garbleRegex = /[\uAC00-\uD7A3\u1100-\u11FF\uFF00-\uFFEF\u3130-\u318F]+/g;
+  return text.replace(garbleRegex, (match, offset, str) => {
+    const start = Math.max(0, offset - 15);
+    const end = Math.min(str.length, offset + match.length + 15);
+    const surrounding = str.slice(start, end);
+    const mathContext = /[\d\+\-\=\∫\(\)\/\^\,\.\\]/.test(surrounding);
+    return mathContext ? "[?]" : "";
+  });
+}
+
 export const toolDefinitions = [
   {
     name: "get_courses",
@@ -223,10 +250,16 @@ export async function handleTool(
 
       try {
         if (ext === "pdf") {
+          const imageCount = detectPdfImageCount(buffer);
           const data = await pdf(buffer);
+          const cleanedText = cleanMathGarble(data.text);
           return {
             filename: file.filename,
-            content: data.text,
+            content: cleanedText,
+            images_detected: imageCount,
+            ...(imageCount > 0 && {
+              images_note: `This PDF contains ${imageCount} embedded image(s) or diagram(s) that could not be extracted as text. They may include graphs, charts, or figures relevant to the content above.`,
+            }),
           };
         } else if (ext === "xlsx" || ext === "xls") {
           const workbook = xlsx.read(buffer, { type: "buffer" });
