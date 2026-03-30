@@ -3,7 +3,8 @@ import { type CanvasClient } from "./canvas-client.js";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 
-const pdf = require("pdf-parse");
+const _pdf = require("pdf-parse");
+const pdf = _pdf.default ?? _pdf;
 const xlsx = require("xlsx");
 const { parseOffice } = require("officeparser");
 
@@ -239,7 +240,6 @@ export async function handleTool(
             content: sheetsData,
           };
         } else if (ext === "docx" || ext === "pptx") {
-          // parseOffice returns the text content
           const text = await parseOffice(buffer);
           return {
             filename: file.filename,
