@@ -10,7 +10,7 @@ This skill allows a future AI agent to understand exactly how this codebase work
 ## 🤖 AI Agent Behavioral Guidelines
 
 - **Search Before Guessing**: If you are unsure about a Canvas API endpoint, a parsing library's behavior, or a Firebase error, **ALWAYS** prioritize using your `search_web` or `perplexity_ask` tools. Never make up API structures or code patterns.
-- **Reference Official Docs**: For Canvas API changes, refer to the [official Canvas LMS API documentation](https://canvas.instructure.com/doc/api/).
+- **Reference Official Docs**: For Canvas API changes, refer to the [official Canvas LMS API documentation](https://developerdocs.instructure.com/services/canvas).
 - **Verify Imports**: Because this is an ESM project using legacy CJS libraries, verify any new imports by checking the `node_modules` structure or using a scratch script (`node -e ...`).
 
 ## 🏗️ Architecture Overview
@@ -66,6 +66,7 @@ To expand the server's capabilities:
 ### File Parsing Protocol
 
 The `read_file_content` tool is the most complex. It uses:
+
 - `pdf-parse`: For PDFs.
 - `xlsx`: For Excel (converts to CSV for table readability).
 - `officeparser`: For Word (`.docx`) and PowerPoint (`.pptx`).
