@@ -1,10 +1,9 @@
 import { z } from "zod";
 import { type CanvasClient } from "./canvas-client.js";
 import { createRequire } from "module";
+import pdf from "@cedrugs/pdf-parse";
 const require = createRequire(import.meta.url);
 
-const _pdf = require("pdf-parse");
-const pdf = _pdf.default ?? _pdf;
 const xlsx = require("xlsx");
 const { parseOffice } = require("officeparser");
 
