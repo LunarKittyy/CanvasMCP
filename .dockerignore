@@ -1,0 +1,14 @@
+node_modules/
+build/
+dist/
+src/
+.git/
+.firebase/
+.firebaserc
+firebase.json
+package-lock.json
+Dockerfile
+.dockerignore
+.env
+*.log
+*.txt
